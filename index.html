@@ -146,13 +146,8 @@
     </div>
 
     <script>
-        // ============================================
-        // CONFIGURATION - UPDATE THIS AFTER DEPLOYING
-        // ============================================
-        const BACKEND_URL = 'https://YOUR-RENDER-APP.onrender.com';
-        // ============================================
+        const BACKEND_URL = 'https://la-cloud-remote.onrender.com';
 
-        // Get device ID from URL
         const urlParams = new URLSearchParams(window.location.search);
         const deviceId = urlParams.get('device');
 
@@ -163,7 +158,6 @@
             document.getElementById('device-display').textContent = 'Device: ' + deviceId.substring(0, 8) + '...';
         }
 
-        // SHA-256 hash function
         async function sha256(message) {
             const msgBuffer = new TextEncoder().encode(message);
             const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -176,17 +170,11 @@
             const msg = document.getElementById('message');
             msg.textContent = text;
             msg.className = 'message ' + (isError ? 'error' : 'success');
-
-            // Auto-hide after 3 seconds
-            setTimeout(() => {
-                msg.className = 'message';
-            }, 3000);
+            setTimeout(() => { msg.className = 'message'; }, 3000);
         }
 
         function setButtonsEnabled(enabled) {
-            document.querySelectorAll('button').forEach(btn => {
-                btn.disabled = !enabled;
-            });
+            document.querySelectorAll('button').forEach(btn => { btn.disabled = !enabled; });
         }
 
         async function sendCommand(command) {
@@ -205,14 +193,11 @@
             setButtonsEnabled(false);
 
             try {
-                // Hash the PIN
                 const pinHash = await sha256(pin);
 
                 const response = await fetch(BACKEND_URL + '/command', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         device_id: deviceId,
                         pin_hash: pinHash,
@@ -234,18 +219,10 @@
                 }
             } catch (error) {
                 showMessage('Network error. Check connection.', true);
-                console.error('Error:', error);
             }
 
             setButtonsEnabled(true);
         }
-
-        // Allow Enter key to submit (defaults to ARM)
-        document.getElementById('pin').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && this.value.length === 4) {
-                // Don't auto-submit - user should explicitly choose ARM or DISARM
-            }
-        });
     </script>
 </body>
 </html>
