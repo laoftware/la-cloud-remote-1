@@ -222,14 +222,13 @@
             <div class="message" id="pin-message"></div>
         </div>
 
-        <!-- Control panel (Arm/Disarm buttons) -->
-        <div id="control-screen" style="display:none;">
+        <!-- Armed screen (waiting to disarm) -->
+        <div id="armed-screen" style="display:none;">
+            <div class="status" id="armed-status" style="opacity:0.7;">Tap below to disarm</div>
             <div class="cmd-buttons">
-                <button class="cmd-btn arm" id="btn-arm" onclick="doArm()">ARM</button>
                 <button class="cmd-btn disarm" id="btn-disarm" onclick="startDisarm()">DISARM</button>
             </div>
-            <div class="status" id="ctrl-status" style="margin-top: 16px;"></div>
-            <div class="message" id="ctrl-message"></div>
+            <div class="message" id="armed-message"></div>
         </div>
 
         <!-- No token -->
@@ -330,17 +329,16 @@
 
         // --- Screen transitions ---
         function showScreen(screenId) {
-            ['pin-screen', 'control-screen', 'no-token'].forEach(id => {
+            ['pin-screen', 'armed-screen', 'no-token'].forEach(id => {
                 document.getElementById(id).style.display = (id === screenId) ? 'block' : 'none';
             });
         }
 
-        function showControlPanel() {
-            document.getElementById('title').textContent = 'LA Remote';
-            document.getElementById('subtitle').textContent = 'Connected';
-            showScreen('control-screen');
-            document.getElementById('ctrl-status').textContent = '';
-            document.getElementById('btn-arm').disabled = false;
+        function showArmedScreen() {
+            document.getElementById('title').textContent = 'Armed';
+            document.getElementById('subtitle').textContent = 'System is armed';
+            showScreen('armed-screen');
+            document.getElementById('armed-status').textContent = 'Tap below to disarm';
             document.getElementById('btn-disarm').disabled = false;
         }
 
@@ -433,8 +431,9 @@
                         window.history.replaceState({}, document.title, cleanUrl);
                     }
 
+                    // Auto-send ARM immediately after pairing
+                    await doArm();
                     busy = false;
-                    showControlPanel();
                 } else if (resp.status === 403) {
                     shakeDots();
                     showMessage('pin-message', 'Wrong PIN or expired QR', true);
@@ -463,13 +462,9 @@
             setTimeout(focusInput, 100);
         }
 
-        // --- ARM (session_token only, no PIN) ---
+        // --- ARM (auto-sent after pairing, no user interaction) ---
         async function doArm() {
-            if (!sessionToken || busy) return;
-            busy = true;
-            document.getElementById('btn-arm').disabled = true;
-            document.getElementById('btn-disarm').disabled = true;
-            document.getElementById('ctrl-status').textContent = 'Sending...';
+            if (!sessionToken) return;
 
             try {
                 const resp = await fetch(BACKEND_URL + '/command', {
@@ -482,8 +477,8 @@
                 });
 
                 if (resp.ok) {
-                    showMessage('ctrl-message', 'ARM command sent', false);
-                    document.getElementById('ctrl-status').textContent = '';
+                    showArmedScreen();
+                    showMessage('armed-message', 'ARM command sent', false);
                 } else if (resp.status === 403) {
                     clearSession();
                     document.getElementById('title').textContent = 'Session Expired';
@@ -491,24 +486,18 @@
                     showScreen('no-token');
                     document.getElementById('no-token').querySelector('p').textContent = 'Session expired.';
                     document.getElementById('no-token').querySelectorAll('p')[1].textContent = 'Scan a new QR code from your laptop.';
-                } else if (resp.status === 429) {
-                    const data = await resp.json().catch(() => ({}));
-                    showMessage('ctrl-message', data.detail || 'Too many requests. Wait.', true);
-                    document.getElementById('ctrl-status').textContent = '';
                 } else {
+                    // ARM failed but session still valid — show armed screen anyway
+                    // (device may already be armed from a previous command)
+                    showArmedScreen();
                     const errBody = await resp.text().catch(() => '');
                     console.log('[ARM] error', resp.status, errBody);
-                    showMessage('ctrl-message', 'Error ' + resp.status + ': ' + (errBody || 'Unknown'), true);
-                    document.getElementById('ctrl-status').textContent = '';
                 }
             } catch (e) {
-                showMessage('ctrl-message', 'Network error.', true);
-                document.getElementById('ctrl-status').textContent = '';
+                // Network error — still show armed screen (session is valid)
+                showArmedScreen();
+                showMessage('armed-message', 'Network error sending ARM.', true);
             }
-
-            busy = false;
-            document.getElementById('btn-arm').disabled = false;
-            document.getElementById('btn-disarm').disabled = false;
         }
 
         // --- DISARM flow: show PIN screen, then send with pin_hash ---
@@ -573,9 +562,9 @@
             const savedToken = loadSession();
 
             if (savedToken) {
-                // Valid saved session — go straight to control panel
+                // Valid saved session — already armed, show disarm option
                 sessionToken = savedToken;
-                showControlPanel();
+                showArmedScreen();
             } else if (pairingToken) {
                 // No saved session but QR token present — start pairing
                 showPinScreen('pairing');
